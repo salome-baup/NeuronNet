@@ -62,6 +62,29 @@ size_t Network::random_connect(const double &mean_deg, const double &mean_streng
     return num_links;
 }
 
+std::vector<std::pair<size_t, double> > Network::neighbors(const size_t& n) const{
+	std::vector<std::pair<size_t, double>> voisins;
+	for(std::map<std::pair<size_t, size_t>,double>::const_iterator it=links.lower_bound({n,0});
+it!=links.end() and ((it->first).first == n); ++it){
+		std::pair<size_t, double> voisin((it->first).second, it->second);
+		voisins.push_back(voisin);
+	}
+	return voisins;
+	
+}
+
+std::pair<size_t, double> Network::degree(const size_t& n) const{
+	std::vector<std::pair<size_t, double> > voisins;
+	voisins = neighbors(n);
+	std::pair<size_t, double> sommes;
+	double sum_intensities(0.);
+	for (size_t i(0) ; i<voisins.size() ; ++i){
+		sum_intensities += voisins[i].second;
+	}
+	sommes = std::make_pair(voisins.size() , sum_intensities);
+	return sommes;
+}
+
 std::vector<double> Network::potentials() const {
     std::vector<double> vals;
     for (size_t nn=0; nn<size(); nn++)
@@ -74,6 +97,36 @@ std::vector<double> Network::recoveries() const {
     for (size_t nn=0; nn<size(); nn++)
         vals.push_back(neurons[nn].recovery());
     return vals;
+}
+
+std::set<size_t> Network::step(const std::vector<double>& tab){
+	std::set<size_t> decharges;
+	for(size_t i(0); i < neurons.size() ; ++i){
+		if (neurons[i].firing()){
+			decharges.insert(i);
+			neurons[i].reset();
+		}
+	}
+	for(size_t i(0); i <neurons.size(); ++i){ 
+		double produit(0.);
+		double lien(0.);
+		double courant(0.);
+		if(neurons[i].is_inhibitory()){
+			produit = tab[i]*0.4;
+		} else produit = tab[i];
+		std::vector<std::pair<size_t, double> > voisins(neighbors(i));
+		for(size_t j(0); j < voisins.size() ; ++j){
+			if (decharges.count(voisins[j].first) != 0){   
+				if (neurons[j].is_inhibitory()){
+					lien += voisins[j].second;
+				} else lien += 0.5*voisins[j].second;
+			}
+		}
+		courant = produit + lien;
+		neurons[i].input(courant);
+		neurons[i].step();
+	}
+	return decharges;
 }
 
 void Network::print_params(std::ostream *_out) {
